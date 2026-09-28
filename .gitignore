@@ -1,0 +1,4 @@
+# Plugin lokal: versi dependensi dikunci pubspec.lock milik app, bukan di sini.
+pubspec.lock
+.dart_tool/
+build/

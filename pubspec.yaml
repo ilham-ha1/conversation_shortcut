@@ -1,0 +1,21 @@
+name: conversation_shortcut
+description: >-
+  Publishes long-lived Android conversation shortcuts so chat notifications
+  (MessagingStyle + shortcutId) land in the system Conversations section.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.11.0 <4.0.0"
+  flutter: ">=3.3.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.komune.conversation_shortcut
+        pluginClass: ConversationShortcutPlugin

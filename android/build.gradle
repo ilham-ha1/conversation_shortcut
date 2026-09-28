@@ -1,0 +1,24 @@
+group 'com.komune.conversation_shortcut'
+version '1.0'
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'com.komune.conversation_shortcut'
+    compileSdk 36
+
+    defaultConfig {
+        minSdkVersion 30
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // ShortcutManagerCompat.pushDynamicShortcut, ShortcutInfoCompat.setLongLived,
+    // androidx.core.app.Person, IconCompat.
+    implementation 'androidx.core:core:1.13.1'
+}
