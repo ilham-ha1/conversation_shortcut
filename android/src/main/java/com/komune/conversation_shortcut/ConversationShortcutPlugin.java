@@ -8,7 +8,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.Paint;
-import android.graphics.PorterDuffColorFilter;
+import android.graphics.Path;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -67,7 +67,6 @@ public class ConversationShortcutPlugin implements FlutterPlugin, MethodChannel.
                         call.argument("id"),
                         call.argument("label"),
                         call.argument("personKey"),
-                        call.argument("iconColor"),
                         call.argument("iconPath")));
                 break;
             case "roundAvatar":
@@ -82,7 +81,7 @@ public class ConversationShortcutPlugin implements FlutterPlugin, MethodChannel.
         }
     }
 
-    private boolean push(String id, String label, String personKey, Number iconColor, String iconPath) {
+    private boolean push(String id, String label, String personKey, String iconPath) {
         if (context == null || id == null || id.isEmpty() || label == null || label.isEmpty()) {
             return false;
         }
@@ -103,7 +102,7 @@ public class ConversationShortcutPlugin implements FlutterPlugin, MethodChannel.
                     .setShortLabel(label)
                     .setLongLived(true)
                     .setPerson(person)
-                    .setIcon(buildIcon(iconColor, iconPath))
+                    .setIcon(buildIcon(iconPath))
                     .setIntent(intent)
                     .setCategories(Collections.singleton(CATEGORY_CONVERSATION))
                     .build();
@@ -118,35 +117,69 @@ public class ConversationShortcutPlugin implements FlutterPlugin, MethodChannel.
     }
 
     /**
-     * Ikon percakapan = ikon notif CUiT ({@code mipmap/ic_notif}) diwarnai putih
-     * di atas latar warna brand. Dibuat adaptive (latar penuh, ikon di dalam
-     * safe zone) supaya sistem memotongnya bulat, sama seperti avatar
-     * percakapan lain. Tanpa warna / resource → jatuh ke ikon launcher.
+     * Ikon percakapan: foto ruang bila ada, kalau tidak ikon launcher app
+     * (keputusan Rama 1 Okt 2026 — menggantikan glyph {@code ic_notif} putih
+     * di lingkaran biru). Ikon launcher per flavor berupa PNG persegi
+     * ber-latar opaque (bukan adaptive). Dipasang mentah, ia tampil KOTAK
+     * (screenshot Rama 1 Okt), jadi dirakit ulang sebagai adaptive bitmap
+     * yang SUDAH bulat sendiri: lingkaran berwarna latar ikon + ikon utuh di
+     * kotak tengah 72/108, sisanya transparan. Bulat baik saat sistem memasang
+     * mask adaptive maupun saat OEM tidak memotongnya (HyperOS tidak memotong
+     * ikon Person, lihat {@link #AVATAR_SCALE}).
      */
-    private IconCompat buildIcon(Number iconColor, String iconPath) {
+    private IconCompat buildIcon(String iconPath) {
         IconCompat photo = buildPhotoIcon(iconPath);
         if (photo != null) return photo;
 
-        int res = context.getResources().getIdentifier("ic_notif", "mipmap", context.getPackageName());
-        Drawable glyph = res == 0 ? null : ContextCompat.getDrawable(context, res);
-        if (iconColor == null || glyph == null) {
-            return IconCompat.createWithResource(context, context.getApplicationInfo().icon);
+        IconCompat launcher = buildLauncherIcon();
+        if (launcher != null) return launcher;
+        return IconCompat.createWithResource(context, context.getApplicationInfo().icon);
+    }
+
+    /** Ikon launcher sebagai adaptive bitmap bulat; {@code null} bila gagal. */
+    private IconCompat buildLauncherIcon() {
+        try {
+            Drawable icon = ContextCompat.getDrawable(context, context.getApplicationInfo().icon);
+            if (icon == null) return null;
+
+            final int size = 432;
+            float inset = size * (18f / 108f);
+            int inner = Math.round(size - inset * 2);
+
+            // Render ikon ke ukuran kotak tengah dulu untuk membaca warna
+            // pojoknya (latar ikon) — dipakai sebagai warna lingkaran.
+            Bitmap rendered = Bitmap.createBitmap(inner, inner, Bitmap.Config.ARGB_8888);
+            Canvas renderCanvas = new Canvas(rendered);
+            icon.setBounds(0, 0, inner, inner);
+            icon.draw(renderCanvas);
+            int background = rendered.getPixel(1, 1);
+
+            Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(bitmap);
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+            float center = size / 2f;
+
+            // Lingkaran sedikit lebih besar dari area mask adaptive (72/108)
+            // supaya tepi mask sistem tidak menyisakan cincin transparan.
+            paint.setColor(Color.alpha(background) == 0 ? Color.WHITE : background);
+            canvas.drawCircle(center, center, size * (37f / 108f), paint);
+
+            // Pojok PNG persegi dipotong lingkaran; warnanya sama dengan
+            // lingkaran di bawahnya, jadi tepi clip (tanpa anti-alias) tak
+            // terlihat — tepi halus berasal dari drawCircle di atas.
+            Path clip = new Path();
+            clip.addCircle(center, center, size * (36f / 108f), Path.Direction.CW);
+            canvas.save();
+            canvas.clipPath(clip);
+            canvas.drawBitmap(rendered, inset, inset, paint);
+            canvas.restore();
+            rendered.recycle();
+
+            return IconCompat.createWithAdaptiveBitmap(bitmap);
+        } catch (Exception e) {
+            Log.e(TAG, "buildLauncherIcon failed", e);
+            return null;
         }
-
-        // 108dp adaptive: safe zone 66dp di tengah; glyph dibuat ±44% supaya
-        // lega di dalam lingkaran, seperti ikon kecil di header notif.
-        final int size = 432;
-        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        canvas.drawColor(iconColor.intValue());
-
-        int inset = Math.round(size * 0.28f);
-        Drawable white = glyph.mutate();
-        white.setColorFilter(new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN));
-        white.setBounds(inset, inset, size - inset, size - inset);
-        white.draw(canvas);
-
-        return IconCompat.createWithAdaptiveBitmap(bitmap);
     }
 
     /**

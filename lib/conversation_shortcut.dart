@@ -27,19 +27,14 @@ class ConversationShortcut {
   /// [personKey] = identitas stabil lawan bicara / ruang (mis. id community)
   /// supaya Android mengenali percakapan yang sama antar-notifikasi.
   ///
-  /// [iconColor] (ARGB) = latar lingkaran ikon percakapan; glyph-nya ikon notif
-  /// app (`mipmap/ic_notif`) diwarnai putih. `null` = ikon launcher.
-  ///
   /// [iconPath] = file foto (mis. foto ruang) yang dipakai sebagai avatar bulat
-  /// percakapan; menang atas [iconColor]. File tak terbaca → jatuh ke
-  /// [iconColor].
+  /// percakapan. Tanpa foto / file tak terbaca → ikon launcher app, dibulatkan.
   ///
   /// `true` = shortcut siap dipakai sebagai `shortcutId` notifikasi.
   static Future<bool> push({
     required String id,
     required String label,
     String? personKey,
-    int? iconColor,
     String? iconPath,
   }) async {
     if (!Platform.isAndroid || id.isEmpty || label.isEmpty) return false;
@@ -48,7 +43,6 @@ class ConversationShortcut {
         "id": id,
         "label": label,
         "personKey": personKey,
-        "iconColor": iconColor,
         "iconPath": iconPath,
       });
       return ok ?? false;
